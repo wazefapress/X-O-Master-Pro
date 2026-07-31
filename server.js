@@ -49,7 +49,9 @@ io.on('connection', (socket) => {
     });
 });
 
+
 const PORT = process.env.PORT || 10000;
+
 server.listen(PORT, () => {
-    console.log(`Server is running on https://x-o-master-pro.onrender.com:${PORT}`);
+    console.log(`Server is running and listening on port ${PORT}`);
 });
