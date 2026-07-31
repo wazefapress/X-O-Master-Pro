@@ -14,6 +14,11 @@ const io = new Server(server, {
     }
 });
 
+// نقطة فحص الصحة لإيقاظ السيرفر (Health Check & Ping)
+app.get('/ping', (req, res) => {
+    res.status(200).send('OK');
+});
+
 // تقديم الملفات الثابتة (HTML, CSS, JS) من المجلد الحالي
 app.use(express.static(path.join(__dirname)));
 
@@ -31,6 +36,7 @@ io.on('connection', (socket) => {
         };
         socket.join(roomCode);
         socket.emit('assignRole', 'X');
+        socket.emit('roomCreated', roomCode); // إشعار العميل بنجاح إنشاء الغرفة
         console.log(`تم إنشاء الغرفة: ${roomCode} بواسطة اللاعب X`);
     });
 
