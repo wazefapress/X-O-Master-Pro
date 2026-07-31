@@ -17,6 +17,10 @@ Multiplayer AI and Online Game up to 2 players
 ## رابط اللعبة 🎮
 https://xo-online.haythamzeidan.workers.dev/
 
+أو 
+
+https://wazefapress.github.io/X-O-Master-Pro/
+
 ## كيفية التشغيل محلياً 🚀
 1. تأكد من تثبيت [Node.js](https://nodejs.org/) في جهازك.
 2. قم بتحميل الملفات وضعها جميعاً في مجلد واحد.
