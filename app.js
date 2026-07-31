@@ -1,21 +1,20 @@
-// --- تهيئة الاتصال الآمن ---
+// --- تهيئة الاتصال الآمن مع دعم Render ومشاكل السبات ---
 let socket = null;
+let joinTimeout = null;
 
 function initSocket() {
     if (!socket && typeof io !== 'undefined') {
         socket = io({
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: 10,
             reconnectionDelay: 1000
         });
-        
-        // ربط مستمعات الأحداث هنا لضمان عملها فور الاتصال
         setupSocketListeners();
     }
     return socket;
 }
 
-// محاولة الاتصال الأولية عند فتح الصفحة
 try {
     initSocket();
 } catch(e) {
@@ -46,7 +45,7 @@ let roomCode = '';
 document.addEventListener("DOMContentLoaded", () => {
     updateScoreBoard();
     updateStagesUI();
-    initSocket(); // محاولة إعادة الربط عند اكتمال تحميل الصفحة
+    initSocket();
     
     document.querySelectorAll('.cell').forEach(cell => {
         cell.addEventListener('click', handleCellClick);
@@ -267,6 +266,7 @@ function resetBoard() {
 }
 
 window.createRoom = function() {
+    playMode = 'online';
     roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
 
     const roomDisplay = document.getElementById('room-code-display');
@@ -289,6 +289,7 @@ window.createRoom = function() {
 };
 
 window.joinRoom = function() {
+    playMode = 'online';
     const codeInput = document.getElementById('room-code-input');
     const nameInput = document.getElementById('player-name');
     
@@ -302,7 +303,6 @@ window.joinRoom = function() {
 
     roomCode = code;
 
-    // محاولة إنشاء الاتصال فور الضغط إذا لم يكن موجوداً
     initSocket();
 
     if (!socket) {
@@ -324,6 +324,12 @@ window.joinRoom = function() {
             Swal.showLoading();
         }
     });
+
+    if (joinTimeout) clearTimeout(joinTimeout);
+    joinTimeout = setTimeout(() => {
+        Swal.close();
+        Swal.fire('تنبيه', 'استغرق السيرفر وقتاً طويلاً للرد (ربما بسبب استيقاظه من السبات). يرجى الضغط على انضمام مرة أخرى.', 'warning');
+    }, 8000);
 };
 
 window.copyCode = function() {
@@ -341,6 +347,7 @@ function setupSocketListeners() {
     socket.off('roomError');
 
     socket.on('gameStarted', () => {
+        if (joinTimeout) clearTimeout(joinTimeout);
         Swal.close();
         const onlineModalEl = document.getElementById('onlineModal');
         if(onlineModalEl) {
@@ -364,6 +371,7 @@ function setupSocketListeners() {
     socket.on('resetBoard', resetBoard);
     
     socket.on('roomError', (msg) => {
+        if (joinTimeout) clearTimeout(joinTimeout);
         Swal.close();
         Swal.fire('خطأ', msg, 'error');
     });
