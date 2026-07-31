@@ -316,22 +316,23 @@ window.joinRoom = function() {
 
     socket.emit('joinRoom', roomCode);
 
+    // إظهار رسالة توضح للمستخدم أن السيرفر قد يأخذ وقتاً للاستيقاظ
     Swal.fire({
         title: 'جاري الانضمام...',
-        text: 'جاري الاتصال بالغرفة عبر سيرفر Render...',
+        text: 'السيرفر يستيقظ من وضع السبات على Render، يرجى الانتظار قليلاً...',
         allowOutsideClick: false,
         didOpen: () => {
             Swal.showLoading();
         }
     });
 
+    // رفع مهلة الانتظار إلى 40 ثانية لتتوافق مع بطء الاستيقاظ المجاني لـ Render
     if (joinTimeout) clearTimeout(joinTimeout);
     joinTimeout = setTimeout(() => {
         Swal.close();
-        Swal.fire('تنبيه', 'استغرق السيرفر وقتاً طويلاً للرد (ربما بسبب استيقاظه من السبات). يرجى الضغط على انضمام مرة أخرى.', 'warning');
-    }, 8000);
+        Swal.fire('تنبيه', 'استغرق السيرفر وقتاً طويلاً للرد. بما أن السيرفر الآن قد استيقظ، يرجى النقر على "انضمام" مرة أخرى وسيعمل فوراً.', 'warning');
+    }, 40000);
 };
-
 window.copyCode = function() {
     navigator.clipboard.writeText(roomCode);
     Swal.fire('تم!', 'تم نسخ الكود بنجاح', 'success');
