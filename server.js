@@ -5,7 +5,14 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// إضافة إعدادات CORS للسماح بالاتصال الخارجي من أي رابط
+const io = new Server(server, {
+    cors: {
+        origin: "*", // السماح لجميع الروابط بالاتصال (لحل مشكلة اختلاف الدومين)
+        methods: ["GET", "POST"]
+    }
+});
 
 // تقديم الملفات الثابتة (HTML, CSS, JS) من المجلد الحالي
 app.use(express.static(path.join(__dirname)));
