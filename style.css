@@ -1,0 +1,138 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+
+:root {
+    --bg-color: #f4f7f6;
+    --primary-color: #2c3e50;
+    --secondary-color: #3498db;
+    --cell-size: clamp(55px, 12vh, 80px);
+}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    font-family: 'Cairo', sans-serif;
+    background-color: var(--bg-color);
+    overflow: hidden; /* قفل التمرير وثبات الشاشة */
+}
+
+/* حاوية التطبيق تتكيف مع ارتفاع الشاشة الفعلي للموبايل */
+.app-wrapper {
+    height: 100dvh;
+    max-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 5px 10px;
+    box-sizing: border-box;
+}
+
+/* شاشة التحذير للوضع الأفقي */
+.landscape-warning {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(30, 40, 50, 0.98);
+    color: white;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+@media screen and (orientation: landscape) {
+    #main-container, .modal { display: none !important; }
+    .landscape-warning { display: flex; }
+}
+.bounce-animation { animation: bounce 2s infinite; }
+@keyframes bounce {
+    0%, 100% { transform: translateY(0) rotate(90deg); }
+    50% { transform: translateY(-20px) rotate(90deg); }
+}
+
+/* شبكة المراحل (الجدول) بحجم متجاوب تماماً */
+.stages-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    background-color: white;
+    padding: 10px;
+    border-radius: 14px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.06);
+    max-width: 300px;
+    width: 100%;
+    margin: auto;
+}
+
+/* جعل المرحلة العاشرة تتوسط السطر الأخير */
+#btn-stage-10 {
+    grid-column: 2;
+}
+
+.stage-btn {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    font-size: clamp(1.1rem, 3vh, 1.5rem);
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.stage-locked {
+    background-color: #e9ecef;
+    color: #adb5bd;
+    cursor: not-allowed;
+}
+
+.stage-unlocked {
+    background-color: var(--secondary-color);
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 3px 6px rgba(52, 152, 219, 0.4);
+}
+
+.stage-unlocked:hover { 
+    transform: scale(1.04); 
+}
+
+/* لوحة اللعب 3x3 */
+.board {
+    display: grid;
+    grid-template-columns: repeat(3, var(--cell-size));
+    grid-template-rows: repeat(3, var(--cell-size));
+    gap: 6px;
+    background: var(--primary-color);
+    padding: 6px;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    margin: auto;
+}
+.cell {
+    background-color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--cell-size) * 0.6);
+    font-weight: 900;
+    cursor: pointer;
+}
+.cell.x { color: #e74c3c; }
+.cell.o { color: #3498db; }
+
+/* تنسيق الهيدر والفوتر لضمان عدم التداخل */
+header {
+    padding-top: 5px !important;
+}
+
+footer {
+    flex-shrink: 0;
+    padding-bottom: 2px;
+}
+
+.copyright-text { 
+    direction: ltr; 
+    font-size: 0.75rem;
+    margin-bottom: 0 !important;
+}

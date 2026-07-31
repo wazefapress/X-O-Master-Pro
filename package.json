@@ -1,0 +1,15 @@
+{
+  "name": "xo-game-pro",
+  "version": "1.0.0",
+  "description": "لعبة X-O احترافية مع 10 مراحل ولعب أونلاين",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "author": "Haytham Zeidan",
+  "license": "ISC"
+}
