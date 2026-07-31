@@ -41,6 +41,7 @@ io.on('connection', (socket) => {
     });
 
     // الانضمام إلى غرفة موجودة
+    // الانضمام إلى غرفة موجودة
     socket.on('joinRoom', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) {
@@ -48,11 +49,25 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // --- التعديل هنا: التأكد من أن اللاعب ليس موجوداً بالفعل لتفادي الطلبات المزدوجة ---
+        const alreadyInRoom = room.players.find(p => p.id === socket.id);
+        if (alreadyInRoom) {
+            // إذا وصل الطلب مرتين عن طريق الخطأ، نعيد توجيهه للعبة دون تسجيله كلاعب جديد
+            socket.join(roomCode);
+            socket.emit('assignRole', alreadyInRoom.role);
+            if (room.players.length === 2) {
+                io.to(roomCode).emit('gameStarted');
+            }
+            return;
+        }
+
+        // التأكد من أن الغرفة لم تمتلئ
         if (room.players.length >= 2) {
             socket.emit('roomError', 'الغرفة ممتلئة بالكامل!');
             return;
         }
 
+        // تسجيل اللاعب الجديد
         room.players.push({ id: socket.id, role: 'O' });
         socket.join(roomCode);
         socket.emit('assignRole', 'O');
