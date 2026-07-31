@@ -6,10 +6,10 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// إضافة إعدادات CORS للسماح بالاتصال الخارجي من أي رابط
+// إضافة إعدادات CORS للسماح بالاتصال الخارجي من أي واجهة (Frontend)
 const io = new Server(server, {
     cors: {
-        origin: "*", // السماح لجميع الروابط بالاتصال (لحل مشكلة اختلاف الدومين)
+        origin: "*", 
         methods: ["GET", "POST"]
     }
 });
@@ -38,7 +38,7 @@ io.on('connection', (socket) => {
     socket.on('joinRoom', (roomCode) => {
         const room = rooms[roomCode];
         if (!room) {
-            socket.emit('roomError', 'الغرفة غير موجودة!');
+            socket.emit('roomError', 'الغرفة غير موجودة أو تم إغلاقها!');
             return;
         }
 

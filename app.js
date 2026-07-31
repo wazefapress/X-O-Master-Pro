@@ -1,15 +1,23 @@
-// --- تهيئة الاتصال الآمن مع دعم Render ومشاكل السبات ---
+// --- تهيئة الاتصال الآمن مع السيرفر ---
 let socket = null;
 let joinTimeout = null;
 
+// هام جداً: ضع رابط تطبيقك على Render هنا لتجنب مشاكل اختلاف النطاق
+const SERVER_URL = "https://x-o-master-pro.onrender.com"; 
+
 function initSocket() {
     if (!socket && typeof io !== 'undefined') {
-        socket = io({
+        socket = io(SERVER_URL, {
             transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: 10,
             reconnectionDelay: 1000
         });
+
+        socket.on('connect_error', (err) => {
+            console.error('خطأ في الاتصال بالسيرفر:', err.message);
+        });
+
         setupSocketListeners();
     }
     return socket;
@@ -278,14 +286,10 @@ window.createRoom = function() {
     }
 
     initSocket();
-    if (socket) {
-        if (!socket.connected) {
-            socket.connect();
-        }
-        socket.emit('createRoom', roomCode);
-    } else {
-        Swal.fire('تنبيه', 'جاري ربط السيرفر، تم توليد الكود وسيعمل الأونلاين بمجرد الاتصال.', 'info');
-    }
+    socket.connect();
+    
+    // ستقوم مكتبة Socket.io بإرسال هذا الطلب تلقائياً بمجرد نجاح الاتصال
+    socket.emit('createRoom', roomCode);
 };
 
 window.joinRoom = function() {
@@ -302,7 +306,6 @@ window.joinRoom = function() {
     }
 
     roomCode = code;
-
     initSocket();
 
     if (!socket) {
@@ -310,29 +313,25 @@ window.joinRoom = function() {
         return;
     }
 
-    if (!socket.connected) {
-        socket.connect();
-    }
-
-    socket.emit('joinRoom', roomCode);
-
-    // إظهار رسالة توضح للمستخدم أن السيرفر قد يأخذ وقتاً للاستيقاظ
     Swal.fire({
         title: 'جاري الانضمام...',
-        text: 'السيرفر يستيقظ من وضع السبات على Render، يرجى الانتظار قليلاً...',
+        text: 'جاري الاتصال بالغرفة عبر سيرفر Render...',
         allowOutsideClick: false,
         didOpen: () => {
             Swal.showLoading();
         }
     });
 
-    // رفع مهلة الانتظار إلى 40 ثانية لتتوافق مع بطء الاستيقاظ المجاني لـ Render
+    socket.connect();
+    socket.emit('joinRoom', roomCode);
+
     if (joinTimeout) clearTimeout(joinTimeout);
     joinTimeout = setTimeout(() => {
         Swal.close();
-        Swal.fire('تنبيه', 'استغرق السيرفر وقتاً طويلاً للرد. بما أن السيرفر الآن قد استيقظ، يرجى النقر على "انضمام" مرة أخرى وسيعمل فوراً.', 'warning');
+        Swal.fire('تنبيه', 'لا يوجد رد من السيرفر. تأكد من أن الرابط (SERVER_URL) صحيح وأن الغرفة أُنشئت بنجاح.', 'warning');
     }, 40000);
 };
+
 window.copyCode = function() {
     navigator.clipboard.writeText(roomCode);
     Swal.fire('تم!', 'تم نسخ الكود بنجاح', 'success');
@@ -359,6 +358,7 @@ function setupSocketListeners() {
     });
 
     socket.on('assignRole', (role) => {
+        if (joinTimeout) clearTimeout(joinTimeout);
         myRole = role;
         const ti = document.getElementById('turn-indicator');
         if (ti) ti.innerText = `أنت: ${myRole} | دور: X`;
