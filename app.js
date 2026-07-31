@@ -2,8 +2,12 @@
 let socket = null;
 let joinTimeout = null;
 
-// هام جداً: ضع رابط تطبيقك على Render هنا لتجنب مشاكل اختلاف النطاق
 const SERVER_URL = "https://x-o-master-pro.onrender.com"; 
+
+// دالة لإيقاظ سيرفر Render مبكراً
+function wakeUpServer() {
+    fetch(`${SERVER_URL}/ping`).catch(() => {});
+}
 
 function initSocket() {
     if (!socket && typeof io !== 'undefined') {
@@ -16,6 +20,12 @@ function initSocket() {
 
         socket.on('connect_error', (err) => {
             console.error('خطأ في الاتصال بالسيرفر:', err.message);
+            if (joinTimeout) {
+                clearTimeout(joinTimeout);
+                joinTimeout = null;
+                Swal.close();
+                Swal.fire('خطأ في الاتصال', 'تعذر الاتصال بالسيرفر. يرجى التحقق من انترنت جهازك أو محاولة إعادة التحميل.', 'error');
+            }
         });
 
         setupSocketListeners();
@@ -25,6 +35,7 @@ function initSocket() {
 
 try {
     initSocket();
+    wakeUpServer();
 } catch(e) {
     console.warn('جاري محاولة الاتصال بالسيرفر...');
 }
@@ -54,6 +65,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateScoreBoard();
     updateStagesUI();
     initSocket();
+    wakeUpServer();
     
     document.querySelectorAll('.cell').forEach(cell => {
         cell.addEventListener('click', handleCellClick);
@@ -105,10 +117,19 @@ function updateStagesUI() {
 
 function openModeSelection(stageIndex) {
     currentStage = stageIndex;
-    const modalEl = document.getElementById('modeModal');
-    if(modalEl) {
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
+    
+    // إذا اختار اللاعب المرحلة الأولى، نعرض له قائمة اختيار النمط (أونلاين أو كمبيوتر)
+    if (stageIndex === 1) {
+        const modalEl = document.getElementById('modeModal');
+        if(modalEl) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    } 
+    // إذا اختار المرحلة الثانية فما فوق، يدخل فوراً للعب ضد الكمبيوتر
+    else {
+        playMode = 'ai';
+        setupGameBoard();
     }
 }
 
@@ -126,6 +147,7 @@ window.showOnlineSetup = function() {
     if(modeModalEl) bootstrap.Modal.getOrCreateInstance(modeModalEl).hide();
     if(onlineModalEl) bootstrap.Modal.getOrCreateInstance(onlineModalEl).show();
     
+    wakeUpServer();
     initSocket();
     if (socket && !socket.connected) {
         socket.connect();
@@ -135,16 +157,30 @@ window.showOnlineSetup = function() {
 function setupGameBoard() {
     document.getElementById('stages-section').classList.add('d-none');
     document.getElementById('game-section').classList.remove('d-none');
-    document.getElementById('current-stage-title').innerText = `المرحلة ${currentStage}`;
+    document.getElementById('current-stage-title').innerText = playMode === 'online' ? `مباراة أونلاين - غرفة: ${roomCode}` : `المرحلة ${currentStage}`;
     resetBoard();
 }
 
 function handleCellClick(e) {
-    const clickedCell = e.target;
+    const clickedCell = e.target.closest('.cell');
+    if (!clickedCell) return;
+
     const cellIndex = parseInt(clickedCell.getAttribute('data-index'));
 
     if (board[cellIndex] !== '' || !gameActive) return;
-    if (playMode === 'online' && currentPlayer !== myRole) return; 
+
+    // تنبيه المستخدم إذا كان يحاول اللعب في غير دوره
+    if (playMode === 'online' && currentPlayer !== myRole) {
+        Swal.fire({
+            toast: true,
+            position: 'top',
+            icon: 'info',
+            title: 'انتظر دور الخصم!',
+            showConfirmButton: false,
+            timer: 1200
+        });
+        return; 
+    }
 
     playMove(clickedCell, cellIndex);
 
@@ -169,7 +205,11 @@ function playMove(cell, index) {
     if (gameActive) {
         currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
         const ti = document.getElementById('turn-indicator');
-        if (ti) ti.innerText = playMode === 'online' ? `أنت: ${myRole} | دور: ${currentPlayer}` : `دور اللاعب: ${currentPlayer}`;
+        if (ti) {
+            ti.innerText = playMode === 'online' 
+                ? (currentPlayer === myRole ? `دورك الآن! (${myRole})` : `انتظر دور الخصم... (${currentPlayer})`)
+                : `دور اللاعب: ${currentPlayer}`;
+        }
     }
 }
 
@@ -231,7 +271,7 @@ function handleWin(winner) {
     } else if (playMode === 'ai' && winner === 'O') {
         Swal.fire('خسرت!', 'لقد فاز الذكاء الاصطناعي.', 'error').then(resetBoard);
     } else if (playMode === 'online') {
-        const msg = winner === myRole ? 'لقد فزت!' : 'لقد خسرت!';
+        const msg = winner === myRole ? '🎉 لقد فزت بالمباراة!' : '❌ لقد خسرت المباراة!';
         const icon = winner === myRole ? 'success' : 'error';
         if(winner === myRole && winSound) winSound.play().catch(()=>{});
         Swal.fire('نهاية المباراة', msg, icon).then(() => {
@@ -264,8 +304,13 @@ function resetBoard() {
     board = ['', '', '', '', '', '', '', '', ''];
     currentPlayer = 'X';
     gameActive = true;
+    
     const ti = document.getElementById('turn-indicator');
-    if(ti) ti.innerText = playMode === 'online' ? `أنت: ${myRole} | دور: X` : 'دور اللاعب: X';
+    if(ti) {
+        ti.innerText = playMode === 'online' 
+            ? (myRole === 'X' ? 'دورك الآن! (X)' : 'انتظر دور الخصم... (X)')
+            : 'دور اللاعب: X';
+    }
     
     document.querySelectorAll('.cell').forEach(cell => {
         cell.innerText = '';
@@ -277,18 +322,16 @@ window.createRoom = function() {
     playMode = 'online';
     roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
 
-    const roomDisplay = document.getElementById('room-code-display');
-    const generatedCodeEl = document.getElementById('generated-code');
-    
-    if (roomDisplay && generatedCodeEl) {
-        roomDisplay.classList.remove('d-none');
-        generatedCodeEl.innerText = roomCode;
-    }
-
     initSocket();
     socket.connect();
-    
-    // ستقوم مكتبة Socket.io بإرسال هذا الطلب تلقائياً بمجرد نجاح الاتصال
+
+    Swal.fire({
+        title: 'جاري إنشاء الغرفة...',
+        text: 'جاري الاتصال بالسيرفر...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
     socket.emit('createRoom', roomCode);
 };
 
@@ -315,11 +358,9 @@ window.joinRoom = function() {
 
     Swal.fire({
         title: 'جاري الانضمام...',
-        text: 'جاري الاتصال بالغرفة عبر سيرفر Render...',
+        text: 'جاري الاتصال بالغرفة...',
         allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
+        didOpen: () => { Swal.showLoading(); }
     });
 
     socket.connect();
@@ -328,8 +369,8 @@ window.joinRoom = function() {
     if (joinTimeout) clearTimeout(joinTimeout);
     joinTimeout = setTimeout(() => {
         Swal.close();
-        Swal.fire('تنبيه', 'لا يوجد رد من السيرفر. تأكد من أن الرابط (SERVER_URL) صحيح وأن الغرفة أُنشئت بنجاح.', 'warning');
-    }, 40000);
+        Swal.fire('تنبيه', 'استغرق السيرفر وقتاً طويلاً للاستجابة. تأكد من إنشاء الغرفة أولاً أو حاول الانضمام مجدداً.', 'warning');
+    }, 60000);
 };
 
 window.copyCode = function() {
@@ -342,26 +383,43 @@ function setupSocketListeners() {
     
     socket.off('gameStarted');
     socket.off('assignRole');
+    socket.off('roomCreated');
     socket.off('opponentMove');
     socket.off('resetBoard');
     socket.off('roomError');
 
+    socket.on('roomCreated', (code) => {
+        Swal.close();
+        const roomDisplay = document.getElementById('room-code-display');
+        const generatedCodeEl = document.getElementById('generated-code');
+        
+        if (roomDisplay && generatedCodeEl) {
+            roomDisplay.classList.remove('d-none');
+            generatedCodeEl.innerText = code;
+        }
+    });
+
     socket.on('gameStarted', () => {
         if (joinTimeout) clearTimeout(joinTimeout);
         Swal.close();
+        
+        // إغلاق المودال وتنظيف الشاشة تماماً من أي طبقة حجب شفافة
         const onlineModalEl = document.getElementById('onlineModal');
-        if(onlineModalEl) {
+        if (onlineModalEl) {
             const modalInstance = bootstrap.Modal.getInstance(onlineModalEl) || bootstrap.Modal.getOrCreateInstance(onlineModalEl);
             modalInstance.hide();
         }
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+
         setupGameBoard();
     });
 
     socket.on('assignRole', (role) => {
         if (joinTimeout) clearTimeout(joinTimeout);
         myRole = role;
-        const ti = document.getElementById('turn-indicator');
-        if (ti) ti.innerText = `أنت: ${myRole} | دور: X`;
     });
 
     socket.on('opponentMove', (index) => {
@@ -374,6 +432,6 @@ function setupSocketListeners() {
     socket.on('roomError', (msg) => {
         if (joinTimeout) clearTimeout(joinTimeout);
         Swal.close();
-        Swal.fire('خطأ', msg, 'error');
+        Swal.fire('تنبيه', msg, 'error');
     });
 }
