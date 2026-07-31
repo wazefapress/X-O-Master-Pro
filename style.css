@@ -136,3 +136,15 @@ footer {
     font-size: 0.75rem;
     margin-bottom: 0 !important;
 }
+/* استبدل كود الميديا القديم بهذا الكود */
+@media (orientation: landscape) and (max-height: 600px), 
+       (orientation: landscape) and (pointer: coarse) {
+    
+    .landscape-warning {
+        display: flex !important; /* أو block حسب تصميمك */
+    }
+    
+    #main-container {
+        display: none !important;
+    }
+}

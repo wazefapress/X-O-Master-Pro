@@ -62,6 +62,18 @@ let playMode = 'ai';
 let roomCode = '';
 
 document.addEventListener("DOMContentLoaded", () => {
+	// --- كشف أجهزة الكمبيوتر لإخفاء رسالة تدوير الهاتف ---
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+if (!isMobile) {
+    // إذا كان الجهاز كمبيوتر، نفرض إخفاء التنبيه وعرض اللعبة دائماً
+    const desktopStyle = document.createElement('style');
+    desktopStyle.innerHTML = `
+        .landscape-warning { display: none !important; }
+        #main-container { display: flex !important; } 
+    `;
+    document.head.appendChild(desktopStyle);
+}
     updateScoreBoard();
     updateStagesUI();
     initSocket();
