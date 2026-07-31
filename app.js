@@ -1,17 +1,23 @@
-// --- الاتصال بالسيرفر (متوافق تماماً مع سيرفر Render) ---
-// --- الاتصال بالسيرفر مع حماية ضد التأخير والسبات على Render ---
+// --- تهيئة الاتصال الآمن ---
 let socket = null;
-try {
-    if (typeof io !== 'undefined') {
-        socket = io();
-    } else {
-        // محاولة جلب الاتصال إذا تأخر التحميل
-        socket = io(window.location.origin, {
+
+function initSocket() {
+    if (!socket && typeof io !== 'undefined') {
+        socket = io({
             reconnection: true,
             reconnectionAttempts: 10,
             reconnectionDelay: 1000
         });
+        
+        // ربط مستمعات الأحداث هنا لضمان عملها فور الاتصال
+        setupSocketListeners();
     }
+    return socket;
+}
+
+// محاولة الاتصال الأولية عند فتح الصفحة
+try {
+    initSocket();
 } catch(e) {
     console.warn('جاري محاولة الاتصال بالسيرفر...');
 }
@@ -40,6 +46,7 @@ let roomCode = '';
 document.addEventListener("DOMContentLoaded", () => {
     updateScoreBoard();
     updateStagesUI();
+    initSocket(); // محاولة إعادة الربط عند اكتمال تحميل الصفحة
     
     document.querySelectorAll('.cell').forEach(cell => {
         cell.addEventListener('click', handleCellClick);
@@ -107,9 +114,12 @@ window.startGame = function(mode) {
 };
 
 window.showOnlineSetup = function() {
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('modeModal')).hide();
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('onlineModal')).show();
+    const modeModalEl = document.getElementById('modeModal');
+    const onlineModalEl = document.getElementById('onlineModal');
+    if(modeModalEl) bootstrap.Modal.getOrCreateInstance(modeModalEl).hide();
+    if(onlineModalEl) bootstrap.Modal.getOrCreateInstance(onlineModalEl).show();
     
+    initSocket();
     if (socket && !socket.connected) {
         socket.connect();
     }
@@ -257,10 +267,8 @@ function resetBoard() {
 }
 
 window.createRoom = function() {
-    // توليد كود الغرفة محلياً فوراً لضمان ظهوره للمستخدم بدون انتظار السيرفر
     roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
 
-    // إظهار خانة الكود في الواجهة فوراً
     const roomDisplay = document.getElementById('room-code-display');
     const generatedCodeEl = document.getElementById('generated-code');
     
@@ -269,7 +277,7 @@ window.createRoom = function() {
         generatedCodeEl.innerText = roomCode;
     }
 
-    // إرسال الكود للسيرفر (إذا كان متصلاً أو سيقوم بالاتصال تلقائياً عند استيقاظ Render)
+    initSocket();
     if (socket) {
         if (!socket.connected) {
             socket.connect();
@@ -280,10 +288,6 @@ window.createRoom = function() {
     }
 };
 
-window.copyCode = function() {
-    navigator.clipboard.writeText(roomCode);
-    Swal.fire('تم!', 'تم نسخ الكود بنجاح', 'success');
-};
 window.joinRoom = function() {
     const codeInput = document.getElementById('room-code-input');
     const nameInput = document.getElementById('player-name');
@@ -298,13 +302,11 @@ window.joinRoom = function() {
 
     roomCode = code;
 
-    // إعادة محاولة الاتصال تلقائياً إذا لم يكن موجوداً
-    if (!socket && typeof io !== 'undefined') {
-        socket = io(window.location.origin);
-    }
+    // محاولة إنشاء الاتصال فور الضغط إذا لم يكن موجوداً
+    initSocket();
 
     if (!socket) {
-        Swal.fire('تنبيه من السيرفر', 'السيرفر يستيقظ من وضع السبات، يرجى المحاولة بعد ثانيتين...', 'info');
+        Swal.fire('خطأ في الاتصال', 'تعذر الاتصال بالسيرفر. تأكد من اتصال الإنترنت.', 'error');
         return;
     }
 
@@ -324,33 +326,22 @@ window.joinRoom = function() {
     });
 };
 
-    // إذا كان السيرفر نائماً على Render، يتم إيقاظه والاتصال فوراً
-    if (!socket.connected) {
-        socket.connect();
-    }
-
-    // إرسال طلب الانضمام للسيرفر
-    socket.emit('joinRoom', roomCode);
-
-    // إظهار رسالة تحميل تفاعلية لتعلم المستخدم أن الزر استجاب ويتم الاتصال
-    Swal.fire({
-        title: 'جاري الانضمام...',
-        text: 'جاري الاتصال بالغرفة، يرجى الانتظار ثوانٍ...',
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
-};
-
 window.copyCode = function() {
     navigator.clipboard.writeText(roomCode);
     Swal.fire('تم!', 'تم نسخ الكود بنجاح', 'success');
 };
 
-if (socket) {
+function setupSocketListeners() {
+    if (!socket) return;
+    
+    socket.off('gameStarted');
+    socket.off('assignRole');
+    socket.off('opponentMove');
+    socket.off('resetBoard');
+    socket.off('roomError');
+
     socket.on('gameStarted', () => {
-        Swal.close(); // إغلاق نافذة التحميل عند النجاح
+        Swal.close();
         const onlineModalEl = document.getElementById('onlineModal');
         if(onlineModalEl) {
             const modalInstance = bootstrap.Modal.getInstance(onlineModalEl) || bootstrap.Modal.getOrCreateInstance(onlineModalEl);
@@ -373,29 +364,7 @@ if (socket) {
     socket.on('resetBoard', resetBoard);
     
     socket.on('roomError', (msg) => {
-        Swal.fire('خطأ', msg, 'error'); // إظهار الخطأ إذا كانت الغرفة ممتلئة أو غير موجودة
+        Swal.close();
+        Swal.fire('خطأ', msg, 'error');
     });
-}
-if (socket) {
-    socket.on('gameStarted', () => {
-        const onlineModalEl = document.getElementById('onlineModal');
-        if(onlineModalEl) {
-            bootstrap.Modal.getOrCreateInstance(onlineModalEl).hide();
-        }
-        setupGameBoard();
-    });
-
-    socket.on('assignRole', (role) => {
-        myRole = role;
-        const ti = document.getElementById('turn-indicator');
-        if (ti) ti.innerText = `أنت: ${myRole} | دور: X`;
-    });
-
-    socket.on('opponentMove', (index) => {
-        let cellToClick = document.querySelector(`.cell[data-index="${index}"]`);
-        if(cellToClick) playMove(cellToClick, index);
-    });
-
-    socket.on('resetBoard', resetBoard);
-    socket.on('roomError', (msg) => Swal.fire('خطأ', msg, 'error'));
 }
