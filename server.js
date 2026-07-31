@@ -7,51 +7,87 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// توجيه السيرفر لقراءة الملفات من المجلد الحالي
-app.use(express.static(__dirname));
+// تقديم الملفات الثابتة (HTML, CSS, JS) من المجلد الحالي
+app.use(express.static(path.join(__dirname)));
+
+// تخزين الغرف وحالتها
+const rooms = {};
 
 io.on('connection', (socket) => {
-    console.log('لاعب متصل:', socket.id);
+    console.log('مستخدم متصل:', socket.id);
 
     // إنشاء غرفة جديدة
     socket.on('createRoom', (roomCode) => {
+        rooms[roomCode] = {
+            players: [{ id: socket.id, role: 'X' }],
+            board: ['', '', '', '', '', '', '', '', '']
+        };
         socket.join(roomCode);
-        socket.emit('roomCreated', roomCode);
+        socket.emit('assignRole', 'X');
+        console.log(`تم إنشاء الغرفة: ${roomCode} بواسطة اللاعب X`);
     });
 
-    // الانضمام لغرفة
+    // الانضمام إلى غرفة موجودة
     socket.on('joinRoom', (roomCode) => {
-        const room = io.sockets.adapter.rooms.get(roomCode);
-        if (room && room.size === 1) {
-            socket.join(roomCode);
-            // إبلاغ اللاعبين ببدء اللعب
-            io.to(roomCode).emit('gameStarted');
-            // تحديد أن من أنشأ الغرفة هو X والمنضم هو O
-            socket.to(roomCode).emit('assignRole', 'X');
-            socket.emit('assignRole', 'O');
-        } else {
-            socket.emit('roomError', 'الغرفة ممتلئة أو غير موجودة!');
+        const room = rooms[roomCode];
+        if (!room) {
+            socket.emit('roomError', 'الغرفة غير موجودة!');
+            return;
         }
+
+        if (room.players.length >= 2) {
+            socket.emit('roomError', 'الغرفة ممتلئة بالكامل!');
+            return;
+        }
+
+        room.players.push({ id: socket.id, role: 'O' });
+        socket.join(roomCode);
+        socket.emit('assignRole', 'O');
+
+        console.log(`انضم اللاعب O إلى الغرفة: ${roomCode}`);
+
+        // بدء اللعبة عندما يكتمل اللاعبان
+        io.to(roomCode).emit('gameStarted');
     });
 
-    // تبادل الحركات
+    // تنفيذ حركة اللعب
     socket.on('makeMove', (data) => {
-        socket.to(data.roomCode).emit('opponentMove', data.index);
+        const { roomCode, index } = data;
+        socket.to(roomCode).emit('opponentMove', index);
     });
 
-    // إعادة اللعب
+    // إعادة تشغيل اللعبة
     socket.on('restartGame', (roomCode) => {
         io.to(roomCode).emit('resetBoard');
     });
 
+    // مغادرة الغرفة أو قطع الاتصال
+    socket.on('leaveRoom', () => {
+        handleDisconnect(socket);
+    });
+
     socket.on('disconnect', () => {
-        console.log('لاعب غادر:', socket.id);
+        console.log('مستخدم انقطع اتصاله:', socket.id);
+        handleDisconnect(socket);
     });
 });
 
+function handleDisconnect(socket) {
+    for (const roomCode in rooms) {
+        const room = rooms[roomCode];
+        const playerIndex = room.players.findIndex(p => p.id === socket.id);
+        if (playerIndex !== -1) {
+            room.players.splice(playerIndex, 1);
+            socket.to(roomCode).emit('roomError', 'انسحب الطرف الآخر من المباراة.');
+            if (room.players.length === 0) {
+                delete rooms[roomCode];
+            }
+            break;
+        }
+    }
+}
 
 const PORT = process.env.PORT || 10000;
-
 server.listen(PORT, () => {
     console.log(`Server is running and listening on port ${PORT}`);
 });
